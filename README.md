@@ -1,44 +1,90 @@
 # ListingGenius
 
-基于 `ListingGenius_DevSpec.md` 的梳理，描述本工具的目标、功能和建议的技术栈，供开发前确认。
+跨境电商 Listing 文案生成与翻译工具，支持 Amazon/eBay，集成 OpenAI 与 Gemini，可生成 5 点描述、翻译、暂存与导出。
 
-## 项目目标
+## 特性
 
-- 面向 Amazon/eBay 等跨境电商团队，提供“输入即文案”的自动化工具。
-- 通过 Gemini/OpenAI 多模态模型，10 秒内生成符合平台 SEO 规则的 5 点描述。
-- 支持图片/标题输入、多语言翻译、批量暂存与导出，替代人工复制粘贴流程。
+- 输入标题/图片，调用 LLM（OpenAI/Gemini）生成 5 点描述，强制 JSON 校验。
+- 编辑与翻译：前端可修改卖点，选择语言翻译（覆盖模式，带确认）。
+- 暂存与恢复：写入 localStorage，页面刷新后仍可恢复；支持删除。
+- 导出：按 `title/point1-5/img-link` 映射导出 CSV。
+- 模型切换：`.env` 中设置 `LLM_PROVIDER`，也可在请求体 `model_provider` 覆盖。
 
-## 主要功能
+## 技术栈
 
-- 文案生成：输入商品标题或图片，调用 Gemini Vision / GPT-4o 生成 5 点描述（强制 JSON 结构，长度校验与自动重试）。
-- 文案校验与编辑：前端呈现 5 点描述，支持手工微调；格式异常时提示并可重试。
-- 多语言翻译：可选择目标语言，调用翻译接口覆盖或并列显示，翻译前弹框确认以防覆盖风险。
-- 状态管理：INIT → GENERATING → REVIEW_PENDING → (TRANSLATING) → STAGED → ARCHIVED，错误流转至 ERROR。
-- 暂存与会话恢复：确认后写入前端 `Staging_Table`/Session，并同步 localStorage，浏览器刷新后恢复未导出的草稿。
-- 导出交付：将暂存列表序列化为 CSV/XLSX，列映射包含 title、point1-5、img-link。
-- 异常处理：AI 少点/多点自动重试一次并给出错误提示；图片不可读时提示更换；翻译覆盖风险提示。
+- 后端：Node.js + Express + OpenAI SDK + @google/generative-ai + Zod。
+- 前端：Vite + React + TypeScript，原生 fetch，CSV 导出（原生 Blob）。
 
-## 数据结构要点
+## 环境变量
 
-- Listing_Item_Draft：`id`、`source_title`、`img_link`、`bullet_points[5]`、`language_code`、`platform`(`AMAZON|EBAY`)、`status`、`created_at`。
-- 导出字段映射：`title` → `source_title`，`point1-5` → `bullet_points[0-4]`，`img-link` → `img_link`。
+根目录 `.env`（参见 `.env.example`）：
 
-## API 草案
+- `OPENAI_API_KEY`
+- `GOOGLE_GEMINI_API_KEY`
+- `LLM_PROVIDER=openai|gemini`（默认 openai，可被请求体覆盖）
+- `PORT`（默认 3000）
 
-- POST `/api/v1/listing/generate`：传入标题/图片、平台、模型提供方，返回 5 点描述与语言。
-- POST `/api/v1/listing/translate`：传入内容数组与目标语言，返回翻译结果数组。
+前端 `.env`（参见 `frontend/.env.example`）：
 
-## 建议技术栈
+- `VITE_API_BASE=http://localhost:3000`
 
-- 前端：React + TypeScript（Vite 或 Next.js App Router），状态管理（Zustand/Jotai），表格与交互组件（Ant Design 或 Mantine），导出工具（SheetJS/CSV 库），localStorage 持久化。
-- 后端：Node.js + TypeScript（Next.js API Route 或 Express/Fastify），调用 OpenAI 与 Google Gemini SDK，内置格式校验与重试中间件。
-- 通信与安全：HTTPS，环境变量管理（`OPENAI_API_KEY`、`GEMINI_API_KEY`），可选 Rate Limit 与请求签名。
-- 测试与质量：Playwright/Cypress 做生成与翻译流程的端到端冒烟，Vitest/Jest 做格式校验与状态机单测，ESLint + Prettier + TypeScript 严格模式。
+## 启动
 
-## 预期开发拆分
+```bash
+npm install
+npm run dev          # 启动后端（默认 3000）
 
-- 核心流程：生成 → 编辑/翻译 → 暂存 → 导出。
-- 关键组件：输入表单（标题/图片）、生成结果卡片、翻译确认模态、暂存表格、导出控制器、错误提示。
-- 配置与运维：API Key 配置、模型选择开关、平台 Prompt 模板管理、日志与简单监控。
+# 另开终端启动前端开发模式（Vite）
+cd frontend
+npm install
+npm run dev          # Vite DevServer，默认 5173，已代理到后端需手动设置 VITE_API_BASE
+```
 
-确认无误后，可据此初始化工程与目录结构，再按模块迭代开发。
+或构建前端并由 Express 静态托管：
+
+```bash
+cd frontend && npm run build
+cd ..
+npm run start        # 会自动服务 frontend/dist 静态文件
+```
+
+健康检查：`curl http://localhost:3000/health`
+
+## API
+
+- `POST /api/v1/listing/generate`
+  ```json
+  {
+    "prompt_context": {
+      "title": "Wireless Bluetooth Headphones",
+      "img_link": "https://example.com/img.jpg",
+      "image_base64": "..."      // 可选
+    },
+    "target_platform": "AMAZON", // or EBAY
+    "model_provider": "openai"   // or gemini，可选
+  }
+  ```
+- `POST /api/v1/listing/translate`
+  ```json
+  {
+    "content_array": ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5"],
+    "target_language": "de",
+    "model_provider": "gemini"
+  }
+  ```
+
+## 前端使用（功能点）
+
+- 输入区：标题、图片 URL、图片上传、平台选择、模型选择。
+- 生成：调用 `/generate`，填充 5 点描述并显示语言。
+- 编辑：可直接修改每条卖点。
+- 翻译：选择目标语言，确认后覆盖当前内容。
+- 暂存：保存当前标题+卖点至列表（localStorage 持久化）。
+- 导出：点击「导出 CSV」生成 `listing_export.csv`。
+
+## 目录
+
+- `src/` 后端代码（Express、路由、LLM provider）
+- `frontend/` 前端 Vite+React 应用
+- `.env.example` 后端环境变量示例
+- `frontend/.env.example` 前端环境变量示例
