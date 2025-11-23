@@ -86,8 +86,8 @@ export const openaiProvider = {
     const system = buildTranslationPrompt(targetLanguage);
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o',
-      temperature: 0.3,
+      model: 'gpt-5.1',
+      temperature: 0.6,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },

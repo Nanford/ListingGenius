@@ -88,8 +88,10 @@ function App() {
   }, [staged]);
 
   const canStage = useMemo(
-    () => bulletPoints.filter(Boolean).length === 5 && title.trim().length > 0,
-    [bulletPoints, title]
+    () =>
+      bulletPoints.filter(Boolean).length === 5 &&
+      (title.trim().length > 0 || Boolean(imageBase64) || imageUrl.trim().length > 0),
+    [bulletPoints, title, imageBase64, imageUrl]
   );
 
   const showToast = (message: string, type: ToastType = 'info') => {
@@ -232,12 +234,13 @@ function App() {
 
   const handleStage = () => {
     if (!canStage) {
-      showToast('标题和 5 点描述均为必填项', 'error');
+      showToast('需生成 5 条描述，且至少提供标题或图片', 'error');
       return;
     }
     const draft: DraftItem = {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      source_title: title.trim(),
+      source_title:
+        title.trim() || (imageUrl.trim() ? `图片: ${imageUrl.trim()}` : '图片生成'),
       bullet_points: bulletPoints,
       translations: translations.some(t => t) ? translations : undefined,
       language_code: language,
@@ -331,7 +334,7 @@ function App() {
               onChange={(e) => setProvider(e.target.value as Provider)}
             >
               <option value="gemini">Gemini Pro</option>
-              <option value="openai">GPT-4o</option>
+              <option value="openai">GPT-5.1</option>
               <option value="kimi">Kimi (Moonshot)</option>
             </select>
           </div>
