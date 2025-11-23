@@ -5,12 +5,22 @@ import { fetchImageAsBase64 } from '../utils/image.js';
 
 const router = express.Router();
 
-const generateSchema = z.object({
-  prompt_context: z.object({
-    title: z.string().trim().min(1, 'title 不能为空'),
+const promptContextSchema = z
+  .object({
+    title: z.string().trim().optional(),
     img_link: z.string().url().optional(),
     image_base64: z.string().optional()
-  }),
+  })
+  .refine(
+    (ctx) => Boolean((ctx.title && ctx.title.trim().length > 0) || ctx.img_link || ctx.image_base64),
+    {
+      message: 'title、img_link、image_base64 至少提供一个',
+      path: ['title']
+    }
+  );
+
+const generateSchema = z.object({
+  prompt_context: promptContextSchema,
   target_platform: z.enum(['AMAZON', 'EBAY']).default('AMAZON'),
   model_provider: z.enum(['openai', 'gemini']).optional()
 });
@@ -27,13 +37,14 @@ router.post('/generate', async (req, res) => {
     const provider = resolveProvider(parsed.model_provider);
     const platform = parsed.target_platform.toLowerCase(); // amazon | ebay
 
+    const productTitle = parsed.prompt_context.title?.trim() || '';
     let imageBase64 = parsed.prompt_context.image_base64;
     if (!imageBase64 && parsed.prompt_context.img_link) {
       imageBase64 = await fetchImageAsBase64(parsed.prompt_context.img_link);
     }
 
     const result = await provider.generate({
-      productTitle: parsed.prompt_context.title,
+      productTitle,
       productImageBase64: imageBase64,
       platform
     });
