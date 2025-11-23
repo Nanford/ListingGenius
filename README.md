@@ -1,90 +1,116 @@
-# ListingGenius
+# ListingGenius (AI-Powered Listing Generator)
 
-跨境电商 Listing 文案生成与翻译工具，支持 Amazon/eBay，集成 OpenAI 与 Gemini，可生成 5 点描述、翻译、暂存与导出。
+跨境电商 Listing 文案智能生成与翻译工具，专为 Amazon/eBay 运营打造。集成 OpenAI (GPT-4o) 与 Google Gemini Pro 多模态大模型，实现从商品标题/图片一键生成高质量 5 点描述，并支持可视化多语言对照翻译。
 
-## 特性
+![ListingGenius UI](./doc/screenshot.png) *(Placeholder for screenshot)*
 
-- 输入标题/图片，调用 LLM（OpenAI/Gemini）生成 5 点描述，强制 JSON 校验。
-- 编辑与翻译：前端可修改卖点，选择语言翻译（覆盖模式，带确认）。
-- 暂存与恢复：写入 localStorage，页面刷新后仍可恢复；支持删除。
-- 导出：按 `title/point1-5/img-link` 映射导出 CSV。
-- 模型切换：`.env` 中设置 `LLM_PROVIDER`，也可在请求体 `model_provider` 覆盖。
+## 核心特性 (Key Features)
 
-## 技术栈
+- **AI 智能生成:** 基于 Gemini Vision / GPT-4o 多模态能力，输入标题或图片即可生成符合 Amazon/eBay SEO 规范的 5 点描述。
+- **对照式翻译:** 创新性的“原文/译文”双栏对照模式，支持一键翻译成德/法/意/西/日等主流语种，修改译文时不影响原文。
+- **极致 UI 设计:** 采用 Apple-style 极简设计语言，毛玻璃特效 Navbar、胶囊按钮与柔和阴影，完美适配 1920x1080 大屏工作流。
+- **本地化暂存:** 生成结果自动支持 LocalStorage 持久化，防止意外刷新丢失；支持草稿箱管理与批量导出。
+- **多模型切换:** 支持在界面实时切换 OpenAI 与 Gemini 模型，灵活应对不同场景需求。
+- **标准化导出:** 一键导出包含原文、译文、图片链接的标准 CSV 文件，可直接用于后续上架流程。
 
-- 后端：Node.js + Express + OpenAI SDK + @google/generative-ai + Zod。
-- 前端：Vite + React + TypeScript，原生 fetch，CSV 导出（原生 Blob）。
+## 技术栈 (Tech Stack)
 
-## 环境变量
+- **Backend:** Node.js + Express
+  - `openai`: OpenAI 官方 SDK
+  - `@google/generative-ai`: Google Gemini SDK
+  - `zod`: 严格的运行时参数校验
+- **Frontend:** React + TypeScript + Vite
+  - `lucide-react`: 现代图标库
+  - Custom CSS Variables: 实现了完整的 Apple 风格设计系统
 
-根目录 `.env`（参见 `.env.example`）：
+## 快速开始 (Getting Started)
 
-- `OPENAI_API_KEY`
-- `GOOGLE_GEMINI_API_KEY`
-- `LLM_PROVIDER=openai|gemini`（默认 openai，可被请求体覆盖）
-- `PORT`（默认 3000）
+### 1. 环境配置
+在根目录创建 `.env` 文件：
+```bash
+OPENAI_API_KEY=sk-proj-...
+GOOGLE_GEMINI_API_KEY=AIzaSy...
+PORT=3000
+LLM_PROVIDER=gemini # 默认模型提供商
+```
 
-前端 `.env`（参见 `frontend/.env.example`）：
+### 2. 安装与启动
 
-- `VITE_API_BASE=http://localhost:3000`
-
-## 启动
+**开发模式 (Development):**
 
 ```bash
+# 1. 启动后端服务
 npm install
-npm run dev          # 启动后端（默认 3000）
+npm run dev
 
-# 另开终端启动前端开发模式（Vite）
+# 2. 启动前端服务 (新终端窗口)
 cd frontend
 npm install
-npm run dev          # Vite DevServer，默认 5173，已代理到后端需手动设置 VITE_API_BASE
+npm run dev
 ```
+访问前端地址: `http://localhost:5173`
 
-或构建前端并由 Express 静态托管：
+**生产构建 (Production):**
 
 ```bash
+# 构建前端并由后端托管
 cd frontend && npm run build
 cd ..
-npm run start        # 会自动服务 frontend/dist 静态文件
+npm start
+```
+访问服务地址: `http://localhost:3000`
+
+## API 文档
+
+### 生成文案 (Generate)
+`POST /api/v1/listing/generate`
+
+```json
+{
+  "prompt_context": {
+    "title": "Anker Soundcore Life Q20",
+    "img_link": "https://example.com/product.jpg"
+  },
+  "target_platform": "AMAZON",
+  "model_provider": "gemini"
+}
 ```
 
-健康检查：`curl http://localhost:3000/health`
+### 翻译内容 (Translate)
+`POST /api/v1/listing/translate`
 
-## API
+```json
+{
+  "content_array": ["High-Resolution Audio...", "Hybrid Active Noise Cancelling..."],
+  "target_language": "de",
+  "model_provider": "openai"
+}
+```
 
-- `POST /api/v1/listing/generate`
-  ```json
-  {
-    "prompt_context": {
-      "title": "Wireless Bluetooth Headphones",
-      "img_link": "https://example.com/img.jpg",
-      "image_base64": "..."      // 可选
-    },
-    "target_platform": "AMAZON", // or EBAY
-    "model_provider": "openai"   // or gemini，可选
-  }
-  ```
-- `POST /api/v1/listing/translate`
-  ```json
-  {
-    "content_array": ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5"],
-    "target_language": "de",
-    "model_provider": "gemini"
-  }
-  ```
+## 数据导出格式
 
-## 前端使用（功能点）
+导出的 CSV 包含以下字段：
+- `title`: 商品原标题
+- `point1` - `point5`: 原始 5 点描述
+- `trans_point1` - `trans_point5`: 翻译后的 5 点描述
+- `img-link`: 图片链接
+- `platform`: 适用平台
+- `language`: 原文语言代码
+- `trans_language`: 译文语言代码
 
-- 输入区：标题、图片 URL、图片上传、平台选择、模型选择。
-- 生成：调用 `/generate`，填充 5 点描述并显示语言。
-- 编辑：可直接修改每条卖点。
-- 翻译：选择目标语言，确认后覆盖当前内容。
-- 暂存：保存当前标题+卖点至列表（localStorage 持久化）。
-- 导出：点击「导出 CSV」生成 `listing_export.csv`。
+## 目录结构
 
-## 目录
-
-- `src/` 后端代码（Express、路由、LLM provider）
-- `frontend/` 前端 Vite+React 应用
-- `.env.example` 后端环境变量示例
-- `frontend/.env.example` 前端环境变量示例
+```
+ListingGenius/
+├── src/                  # 后端源码
+│   ├── providers/        # LLM 接口封装 (Factory Pattern)
+│   ├── routes/           # Express 路由
+│   └── server.js         # 入口文件
+├── frontend/             # 前端源码
+│   ├── src/
+│   │   ├── App.tsx       # 核心业务组件
+│   │   ├── App.css       # 布局与组件样式
+│   │   └── index.css     # 全局变量与设计系统
+│   └── vite.config.ts    # 构建配置
+└── README.md
+```

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Upload,
   FileText,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-type Provider = 'openai' | 'gemini';
+type Provider = 'openai' | 'gemini' | 'kimi';
 type Platform = 'AMAZON' | 'EBAY';
 type ToastType = 'info' | 'error' | 'success';
 
@@ -35,7 +35,7 @@ type DraftItem = {
 
 type Toast = { type: ToastType; message: string } | null;
 
-const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:3000' : '');
+const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:8016' : '');
 const STORAGE_KEY = 'listing_drafts_v1';
 const languages = [
   { code: 'en-US', label: '英语 (美式)' },
@@ -51,6 +51,9 @@ const languages = [
 const emptyBullets = () => Array(5).fill('');
 
 function App() {
+  const [inputMode, setInputMode] = useState<'single' | 'batch'>('single');
+  const [batchTitles, setBatchTitles] = useState('');
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, processing: false });
   const [title, setTitle] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -65,6 +68,7 @@ function App() {
   const [translating, setTranslating] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const [staged, setStaged] = useState<DraftItem[]>([]);
+  const historyListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -77,6 +81,10 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(staged));
+    // Scroll to top when new items are added
+    if (historyListRef.current) {
+      historyListRef.current.scrollTop = 0;
+    }
   }, [staged]);
 
   const canStage = useMemo(
@@ -137,6 +145,56 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBatchGenerate = async () => {
+    const titles = batchTitles.split('\n').map(t => t.trim()).filter(Boolean);
+    if (!titles.length) {
+      showToast('请输入至少一个标题', 'error');
+      return;
+    }
+
+    setBatchProgress({ current: 0, total: titles.length, processing: true });
+    
+    // Process one by one to respect token limits and allow progress tracking
+    for (let i = 0; i < titles.length; i++) {
+      const currentTitle = titles[i];
+      try {
+        const payload = {
+          prompt_context: { title: currentTitle },
+          target_platform: platform,
+          model_provider: provider
+        };
+        const res = await fetch(`${API_BASE}/api/v1/listing/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.data) {
+          const draft: DraftItem = {
+            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+            source_title: currentTitle,
+            bullet_points: data.data.bullet_points,
+            language_code: data.data.language || 'en-US',
+            platform,
+            provider,
+            created_at: new Date().toISOString(),
+            status: 'STAGED'
+          };
+          setStaged((prev) => [draft, ...prev]);
+        } else {
+          console.error(`Failed to generate for: ${currentTitle}`, data);
+        }
+      } catch (err) {
+        console.error(`Error generating for: ${currentTitle}`, err);
+      }
+      setBatchProgress(prev => ({ ...prev, current: i + 1 }));
+    }
+
+    setBatchProgress({ current: 0, total: 0, processing: false });
+    showToast(`批量生成完成`, 'success');
   };
 
   const handleTranslate = async (targetLang: string) => {
@@ -274,6 +332,7 @@ function App() {
             >
               <option value="gemini">Gemini Pro</option>
               <option value="openai">GPT-4o</option>
+              <option value="kimi">Kimi (Moonshot)</option>
             </select>
           </div>
           <div className="control-group">
@@ -305,63 +364,131 @@ function App() {
               <LayoutTemplate size={18} />
               输入素材
             </div>
-          </div>
-          <div className="panel-body">
-            <div className="form-group">
-              <label className="form-label">商品标题</label>
-              <textarea
-                className="textarea-field"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="例如：无线降噪蓝牙耳机，超长续航..."
-                rows={3}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">商品图片</label>
-              <div className="upload-zone">
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  id="file-upload" 
-                  style={{display: 'none'}}
-                  onChange={(e) => handleFile(e.target.files?.[0])} 
-                />
-                <label htmlFor="file-upload" style={{cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%'}}>
-                  {imageBase64 ? (
-                    <>
-                      <CheckCircle size={24} className="text-success" color="var(--success)" />
-                      <span>图片已选择</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={24} />
-                      <span>点击或拖拽上传图片</span>
-                    </>
-                  )}
-                </label>
-              </div>
-              <input
-                type="url"
-                className="input-field"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="或粘贴图片 URL..."
-              />
-            </div>
-
-            <div style={{ marginTop: 'auto' }}>
-              <button 
-                className="btn btn-primary" 
-                style={{ width: '100%' }} 
-                onClick={handleGenerate} 
-                disabled={loading}
+            {/* Input Mode Switcher */}
+            <div className="toggle-group">
+              <button
+                className={`toggle-btn ${inputMode === 'single' ? 'active' : ''}`}
+                onClick={() => setInputMode('single')}
+                disabled={batchProgress.processing}
               >
-                {loading ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-                生成文案
+                单条
+              </button>
+              <button
+                className={`toggle-btn ${inputMode === 'batch' ? 'active' : ''}`}
+                onClick={() => setInputMode('batch')}
+                disabled={batchProgress.processing}
+              >
+                批量
               </button>
             </div>
+          </div>
+          <div className="panel-body">
+            {inputMode === 'single' ? (
+              <>
+                <div className="form-group">
+                  <label className="form-label">商品标题</label>
+                  <textarea
+                    className="textarea-field"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="例如：无线降噪蓝牙耳机，超长续航..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">商品图片</label>
+                  <div className="upload-zone">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      id="file-upload" 
+                      style={{display: 'none'}}
+                      onChange={(e) => handleFile(e.target.files?.[0])} 
+                    />
+                    <label htmlFor="file-upload" style={{cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%'}}>
+                      {imageBase64 ? (
+                        <>
+                          <CheckCircle size={24} className="text-success" color="var(--success)" />
+                          <span>图片已选择</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={24} />
+                          <span>点击或拖拽上传图片</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  <input
+                    type="url"
+                    className="input-field"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="或粘贴图片 URL..."
+                  />
+                </div>
+
+                <div style={{ marginTop: 'auto' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ width: '100%' }} 
+                    onClick={handleGenerate} 
+                    disabled={loading}
+                  >
+                    {loading ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                    生成文案
+                  </button>
+                </div>
+              </>
+            ) : (
+              // Batch Mode UI
+              <>
+                 <div className="form-group" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <label className="form-label">批量标题 (一行一个)</label>
+                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>
+                      {batchTitles.split('\n').filter(t => t.trim()).length} 个标题
+                    </span>
+                  </div>
+                  <textarea
+                    className="textarea-field"
+                    style={{flex: 1, minHeight: '300px', resize: 'none'}}
+                    value={batchTitles}
+                    onChange={(e) => setBatchTitles(e.target.value)}
+                    placeholder="Anker Soundcore Life Q20...&#10;Sony WH-1000XM5...&#10;Logitech MX Master 3..."
+                    disabled={batchProgress.processing}
+                  />
+                </div>
+                
+                {batchProgress.processing && (
+                  <div style={{width: '100%', marginBottom: '16px'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize: '0.8rem', marginBottom: '4px', fontWeight: 500}}>
+                       <span>正在处理...</span>
+                       <span>{batchProgress.current} / {batchProgress.total}</span>
+                    </div>
+                    <div style={{height: '6px', width: '100%', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden'}}>
+                      <div style={{
+                        height: '100%', 
+                        background: 'var(--primary)', 
+                        width: `${(batchProgress.current / batchProgress.total) * 100}%`,
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+                )}
+
+                <button 
+                  className="btn btn-primary" 
+                  style={{ width: '100%' }} 
+                  onClick={handleBatchGenerate} 
+                  disabled={batchProgress.processing}
+                >
+                  {batchProgress.processing ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                  开始批量生成
+                </button>
+              </>
+            )}
           </div>
         </section>
 
@@ -445,7 +572,7 @@ function App() {
               草稿箱 ({staged.length})
             </div>
           </div>
-          <div className="panel-body" style={{ padding: 0 }}>
+          <div className="panel-body" style={{ padding: 0 }} ref={historyListRef}>
             {staged.length === 0 ? (
               <div className="empty-state">
                 <ImageIcon size={48} strokeWidth={1} />
