@@ -23,7 +23,9 @@ type DraftItem = {
   id: string;
   source_title: string;
   bullet_points: string[];
+  translations?: string[];
   language_code: string;
+  trans_language_code?: string;
   platform: Platform;
   provider: Provider;
   img_link?: string;
@@ -55,7 +57,10 @@ function App() {
   const [platform, setPlatform] = useState<Platform>('AMAZON');
   const [provider, setProvider] = useState<Provider>('gemini');
   const [bulletPoints, setBulletPoints] = useState<string[]>(() => emptyBullets());
-  const [language, setLanguage] = useState('en-US');
+  const [translations, setTranslations] = useState<string[]>(() => emptyBullets());
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [language, setLanguage] = useState('en-US'); // Source language
+  const [transLanguage, setTransLanguage] = useState('de'); // Default translation target
   const [loading, setLoading] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -124,6 +129,8 @@ function App() {
       if (!res.ok) throw new Error(data.message || '生成失败');
       setBulletPoints(data.data.bullet_points || emptyBullets());
       setLanguage(data.data.language || 'en-US');
+      setTranslations(emptyBullets()); // Reset translations on new generation
+      setShowTranslation(false); // Hide translation on new generation
       showToast(`生成成功 (${data.data.provider || provider})`, 'success');
     } catch (err: any) {
       showToast(err.message || '生成失败', 'error');
@@ -133,13 +140,14 @@ function App() {
   };
 
   const handleTranslate = async (targetLang: string) => {
+    setTransLanguage(targetLang);
     if (!targetLang) return;
+    setShowTranslation(true); // Show translation area immediately
     if (!bulletPoints.filter(Boolean).length) {
       showToast('暂无内容可翻译', 'error');
       return;
     }
-    const ok = window.confirm('翻译将覆盖当前编辑框的内容，是否继续？');
-    if (!ok) return;
+    // No confirmation needed as we are not overwriting
     setTranslating(true);
     try {
       const payload = {
@@ -154,8 +162,7 @@ function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || '翻译失败');
-      setBulletPoints(data.data.translated_array || bulletPoints);
-      setLanguage(targetLang);
+      setTranslations(data.data.translated_array || translations);
       showToast(`已翻译为 ${targetLang}`, 'success');
     } catch (err: any) {
       showToast(err.message || '翻译失败', 'error');
@@ -163,6 +170,7 @@ function App() {
       setTranslating(false);
     }
   };
+
 
   const handleStage = () => {
     if (!canStage) {
@@ -173,7 +181,9 @@ function App() {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
       source_title: title.trim(),
       bullet_points: bulletPoints,
+      translations: translations.some(t => t) ? translations : undefined,
       language_code: language,
+      trans_language_code: translations.some(t => t) ? transLanguage : undefined,
       platform,
       provider,
       img_link: imageUrl.trim() || undefined,
@@ -183,6 +193,7 @@ function App() {
     setStaged((prev) => [draft, ...prev]);
     setTitle('');
     setBulletPoints(emptyBullets());
+    setTranslations(emptyBullets());
     setImageUrl('');
     setImageBase64(null);
     showToast('已保存至草稿箱', 'success');
@@ -193,7 +204,12 @@ function App() {
       showToast('暂无草稿可导出', 'error');
       return;
     }
-    const header = ['title', 'point1', 'point2', 'point3', 'point4', 'point5', 'img-link', 'platform', 'language'];
+    const header = [
+      'title', 
+      'point1', 'point2', 'point3', 'point4', 'point5', 
+      'trans_point1', 'trans_point2', 'trans_point3', 'trans_point4', 'trans_point5',
+      'img-link', 'platform', 'language', 'trans_language'
+    ];
     const rows = staged.map((item) => [
       item.source_title,
       item.bullet_points[0] || '',
@@ -201,17 +217,23 @@ function App() {
       item.bullet_points[2] || '',
       item.bullet_points[3] || '',
       item.bullet_points[4] || '',
+      (item.translations && item.translations[0]) || '',
+      (item.translations && item.translations[1]) || '',
+      (item.translations && item.translations[2]) || '',
+      (item.translations && item.translations[3]) || '',
+      (item.translations && item.translations[4]) || '',
       item.img_link || '',
       item.platform,
-      item.language_code
+      item.language_code,
+      item.trans_language_code || ''
     ]);
     const csv = [header, ...rows]
       .map((row) =>
         row
-          .map((cell) => `"${(cell ?? '').toString().replaceAll('"', '""')}"`) // Corrected: escaped double quotes within CSV cells
+          .map((cell) => `"${(cell ?? '').toString().replaceAll('"', '""')}"`)
           .join(',')
       )
-      .join('\n'); // Corrected: used literal newline character
+      .join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -224,6 +246,10 @@ function App() {
 
   const updateBullet = (idx: number, value: string) => {
     setBulletPoints((prev) => prev.map((bp, i) => (i === idx ? value : bp)));
+  };
+
+  const updateTranslation = (idx: number, value: string) => {
+    setTranslations((prev) => prev.map((t, i) => (i === idx ? value : t)));
   };
 
   return (
@@ -347,32 +373,58 @@ function App() {
               编辑与预览
             </div>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-              <Globe size={14} className="text-muted" color="var(--text-muted)" />
-              <select 
-                className="select-input" 
-                style={{fontSize: '0.8rem'}}
-                value={language}
-                onChange={(e) => handleTranslate(e.target.value)}
-                disabled={translating}
+              <button 
+                className={`btn btn-ghost ${showTranslation ? 'active' : ''}`}
+                style={{padding: '4px 8px', fontSize: '0.8rem'}}
+                onClick={() => setShowTranslation(!showTranslation)}
+                title="显示/隐藏翻译"
               >
-                {languages.map(l => (
-                    <option key={l.code} value={l.code}>{l.label}</option>
-                ))}
-              </select>
+                <Globe size={14} />
+                {showTranslation ? '隐藏翻译' : '显示翻译'}
+              </button>
+              {showTranslation && (
+                <select 
+                  className="select-input" 
+                  style={{fontSize: '0.8rem', maxWidth: '100px'}}
+                  value={transLanguage}
+                  onChange={(e) => handleTranslate(e.target.value)}
+                  disabled={translating}
+                >
+                  {languages.map(l => (
+                      <option key={l.code} value={l.code}>{l.label}</option>
+                  ))}
+                </select>
+              )}
               {translating && <Loader2 size={14} className="spin" />}
             </div>
           </div>
           <div className="panel-body">
             <div className="bullets-list">
               {bulletPoints.map((bp, idx) => (
-                <div key={idx} className="bullet-item">
+                <div key={idx} className="bullet-group">
                   <div className="bullet-number">{idx + 1}</div>
-                  <textarea
-                    className="textarea-field"
-                    value={bp}
-                    onChange={(e) => updateBullet(idx, e.target.value)}
-                    placeholder={`卖点描述 #${idx + 1}...`}
-                  />
+                  <div className="bullet-inputs">
+                    <div className="input-wrapper">
+                      <span className="input-label">Original ({language})</span>
+                      <textarea
+                        className="textarea-field"
+                        value={bp}
+                        onChange={(e) => updateBullet(idx, e.target.value)}
+                        placeholder={`卖点描述 #${idx + 1}...`}
+                      />
+                    </div>
+                    {showTranslation && (
+                      <div className="input-wrapper translation">
+                        <span className="input-label">Translation ({transLanguage})</span>
+                        <textarea
+                          className="textarea-field translation-field"
+                          value={translations[idx]}
+                          onChange={(e) => updateTranslation(idx, e.target.value)}
+                          placeholder="点击上方翻译按钮生成..."
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -408,6 +460,7 @@ function App() {
                       <div className="badges">
                         <span className={`badge ${item.platform.toLowerCase()}`}>{item.platform}</span>
                         <span className="badge">{item.language_code}</span>
+                        {item.translations && <span className="badge trans">{item.trans_language_code}</span>}
                       </div>
                       <button className="btn btn-ghost danger" onClick={() => {
                           if(confirm('确认删除此草稿？')) {
