@@ -33,7 +33,7 @@ type DraftItem = {
 
 type Toast = { type: ToastType; message: string } | null;
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:3000' : '');
 const STORAGE_KEY = 'listing_drafts_v1';
 const languages = [
   { code: 'en-US', label: '英语 (美式)' },
