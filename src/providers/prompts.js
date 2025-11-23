@@ -14,7 +14,7 @@ export const buildGenerationPrompt = (platform = 'amazon') => {
     '  "language": "bcp47 语言代码，如 en-US 或 de-DE"',
     '}',
     '要求：',
-    '- bullet_points 必须且只返回 5 条，每条 80-120 字符，可直接上架。',
+    '- bullet_points 必须且只返回 5 条，每条 尽可能的详细，且能突出产品卖点，可直接上架。',
     '- 结合图片信息（若提供）补全材质/尺寸/适用场景等硬信息；缺失时可合理推断但不虚构。',
     '- 仅返回 JSON 对象文本，不要 Markdown/说明/额外引号。'
   ].join('\n');
