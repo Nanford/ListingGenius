@@ -11,8 +11,10 @@ import {
   CheckCircle,
   Sparkles,
   LayoutTemplate,
-  History
+  History,
+  Table
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import './App.css';
 
 type Provider = 'openai' | 'gemini' | 'kimi';
@@ -21,6 +23,7 @@ type ToastType = 'info' | 'error' | 'success';
 
 type DraftItem = {
   id: string;
+  sku?: string; // 🆕 新增 SKU 字段
   source_title: string;
   bullet_points: string[];
   translations?: string[];
@@ -31,6 +34,11 @@ type DraftItem = {
   img_link?: string;
   created_at: string;
   status: 'STAGED';
+};
+
+type TableRow = {
+  sku: string;
+  title: string;
 };
 
 type Toast = { type: ToastType; message: string } | null;
@@ -51,9 +59,11 @@ const languages = [
 const emptyBullets = () => Array(5).fill('');
 
 function App() {
-  const [inputMode, setInputMode] = useState<'single' | 'batch'>('single');
+  const [inputMode, setInputMode] = useState<'single' | 'batch' | 'import'>('single');
   const [batchTitles, setBatchTitles] = useState('');
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, processing: false });
+  const [uploadedTableData, setUploadedTableData] = useState<TableRow[]>([]);
+  const [tableFileName, setTableFileName] = useState<string>('');
   const [title, setTitle] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -114,6 +124,64 @@ function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleTableUpload = (file?: File) => {
+    if (!file) {
+      setUploadedTableData([]);
+      setTableFileName('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+        if (jsonData.length < 2) {
+          showToast('表格数据为空', 'error');
+          return;
+        }
+
+        // 读取表头
+        const headers = jsonData[0].map((h: any) => String(h).toLowerCase().trim());
+        const skuIndex = headers.findIndex((h: string) => h === 'sku');
+        const titleIndex = headers.findIndex((h: string) => h === 'title');
+
+        if (skuIndex === -1 || titleIndex === -1) {
+          showToast('表格必须包含 SKU 和 title 列', 'error');
+          return;
+        }
+
+        // 提取数据行
+        const rows: TableRow[] = [];
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          const sku = row[skuIndex] ? String(row[skuIndex]).trim() : '';
+          const title = row[titleIndex] ? String(row[titleIndex]).trim() : '';
+          if (sku && title) {
+            rows.push({ sku, title });
+          }
+        }
+
+        if (rows.length === 0) {
+          showToast('未找到有效的数据行', 'error');
+          return;
+        }
+
+        setUploadedTableData(rows);
+        setTableFileName(file.name);
+        showToast(`成功加载 ${rows.length} 条数据`, 'success');
+      } catch (err) {
+        console.error('解析表格失败', err);
+        showToast('解析表格失败，请检查文件格式', 'error');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const handleGenerate = async () => {
     if (!title.trim() && !imageUrl.trim() && !imageBase64) {
       showToast('请输入标题或上传图片', 'error');
@@ -150,20 +218,34 @@ function App() {
   };
 
   const handleBatchGenerate = async () => {
-    const titles = batchTitles.split('\n').map(t => t.trim()).filter(Boolean);
-    if (!titles.length) {
-      showToast('请输入至少一个标题', 'error');
-      return;
+    // 根据输入模式决定数据源
+    let itemsToProcess: Array<{ sku?: string; title: string }> = [];
+
+    if (inputMode === 'import') {
+      // 从表格数据生成
+      if (!uploadedTableData.length) {
+        showToast('请先上传表格文件', 'error');
+        return;
+      }
+      itemsToProcess = uploadedTableData;
+    } else {
+      // 从手动输入的标题生成
+      const titles = batchTitles.split('\n').map(t => t.trim()).filter(Boolean);
+      if (!titles.length) {
+        showToast('请输入至少一个标题', 'error');
+        return;
+      }
+      itemsToProcess = titles.map(title => ({ title }));
     }
 
-    setBatchProgress({ current: 0, total: titles.length, processing: true });
-    
+    setBatchProgress({ current: 0, total: itemsToProcess.length, processing: true });
+
     // Process one by one to respect token limits and allow progress tracking
-    for (let i = 0; i < titles.length; i++) {
-      const currentTitle = titles[i];
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      const item = itemsToProcess[i];
       try {
         const payload = {
-          prompt_context: { title: currentTitle },
+          prompt_context: { title: item.title },
           target_platform: platform,
           model_provider: provider
         };
@@ -173,11 +255,12 @@ function App() {
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        
+
         if (res.ok && data.data) {
           const draft: DraftItem = {
             id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-            source_title: currentTitle,
+            sku: item.sku, // 🆕 保存 SKU 信息
+            source_title: item.title,
             bullet_points: data.data.bullet_points,
             language_code: data.data.language || 'en-US',
             platform,
@@ -187,10 +270,10 @@ function App() {
           };
           setStaged((prev) => [draft, ...prev]);
         } else {
-          console.error(`Failed to generate for: ${currentTitle}`, data);
+          console.error(`Failed to generate for: ${item.title}`, data);
         }
       } catch (err) {
-        console.error(`Error generating for: ${currentTitle}`, err);
+        console.error(`Error generating for: ${item.title}`, err);
       }
       setBatchProgress(prev => ({ ...prev, current: i + 1 }));
     }
@@ -266,12 +349,14 @@ function App() {
       return;
     }
     const header = [
-      'title', 
-      'point1', 'point2', 'point3', 'point4', 'point5', 
+      'SKU', // 🆕 添加 SKU 列
+      'title',
+      'point1', 'point2', 'point3', 'point4', 'point5',
       'trans_point1', 'trans_point2', 'trans_point3', 'trans_point4', 'trans_point5',
       'img-link', 'platform', 'language', 'trans_language'
     ];
     const rows = staged.map((item) => [
+      item.sku || '', // 🆕 导出 SKU 数据
       item.source_title,
       item.bullet_points[0] || '',
       item.bullet_points[1] || '',
@@ -383,6 +468,13 @@ function App() {
               >
                 批量
               </button>
+              <button
+                className={`toggle-btn ${inputMode === 'import' ? 'active' : ''}`}
+                onClick={() => setInputMode('import')}
+                disabled={batchProgress.processing}
+              >
+                导入表格
+              </button>
             </div>
           </div>
           <div className="panel-body">
@@ -402,12 +494,12 @@ function App() {
                 <div className="form-group">
                   <label className="form-label">商品图片</label>
                   <div className="upload-zone">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      id="file-upload" 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="file-upload"
                       style={{display: 'none'}}
-                      onChange={(e) => handleFile(e.target.files?.[0])} 
+                      onChange={(e) => handleFile(e.target.files?.[0])}
                     />
                     <label htmlFor="file-upload" style={{cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%'}}>
                       {imageBase64 ? (
@@ -433,10 +525,10 @@ function App() {
                 </div>
 
                 <div style={{ marginTop: 'auto' }}>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ width: '100%' }} 
-                    onClick={handleGenerate} 
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%' }}
+                    onClick={handleGenerate}
                     disabled={loading}
                   >
                     {loading ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
@@ -444,7 +536,7 @@ function App() {
                   </button>
                 </div>
               </>
-            ) : (
+            ) : inputMode === 'batch' ? (
               // Batch Mode UI
               <>
                  <div className="form-group" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
@@ -481,11 +573,93 @@ function App() {
                   </div>
                 )}
 
-                <button 
-                  className="btn btn-primary" 
-                  style={{ width: '100%' }} 
-                  onClick={handleBatchGenerate} 
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                  onClick={handleBatchGenerate}
                   disabled={batchProgress.processing}
+                >
+                  {batchProgress.processing ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                  开始批量生成
+                </button>
+              </>
+            ) : (
+              // Import Table Mode UI
+              <>
+                <div className="form-group" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                  <label className="form-label">上传表格文件</label>
+                  <div className="upload-zone" style={{minHeight: '200px'}}>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      id="table-upload"
+                      style={{display: 'none'}}
+                      onChange={(e) => handleTableUpload(e.target.files?.[0])}
+                    />
+                    <label htmlFor="table-upload" style={{cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%'}}>
+                      {uploadedTableData.length > 0 ? (
+                        <>
+                          <CheckCircle size={32} className="text-success" color="var(--success)" />
+                          <div style={{textAlign: 'center'}}>
+                            <div style={{fontWeight: 500, marginBottom: '4px'}}>{tableFileName}</div>
+                            <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>
+                              已加载 {uploadedTableData.length} 条数据
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Table size={32} />
+                          <div style={{textAlign: 'center'}}>
+                            <div style={{fontWeight: 500, marginBottom: '4px'}}>点击或拖拽上传表格</div>
+                            <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>
+                              支持 .xlsx, .xls, .csv 格式<br/>
+                              必须包含 SKU 和 title 列
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  </div>
+
+                  {uploadedTableData.length > 0 && (
+                    <div style={{marginTop: '16px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px'}}>
+                      <div style={{fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px'}}>
+                        数据预览（前 5 行）
+                      </div>
+                      <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', maxHeight: '150px', overflowY: 'auto'}}>
+                        {uploadedTableData.slice(0, 5).map((row, idx) => (
+                          <div key={idx} style={{padding: '4px 0', borderBottom: '1px solid var(--border)'}}>
+                            <strong>SKU:</strong> {row.sku} | <strong>Title:</strong> {row.title.substring(0, 50)}...
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {batchProgress.processing && (
+                  <div style={{width: '100%', marginBottom: '16px'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize: '0.8rem', marginBottom: '4px', fontWeight: 500}}>
+                       <span>正在处理...</span>
+                       <span>{batchProgress.current} / {batchProgress.total}</span>
+                    </div>
+                    <div style={{height: '6px', width: '100%', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden'}}>
+                      <div style={{
+                        height: '100%',
+                        background: 'var(--primary)',
+                        width: `${(batchProgress.current / batchProgress.total) * 100}%`,
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                  onClick={handleBatchGenerate}
+                  disabled={batchProgress.processing || uploadedTableData.length === 0}
                 >
                   {batchProgress.processing ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
                   开始批量生成
