@@ -161,7 +161,8 @@ function App() {
           const row = jsonData[i];
           const sku = row[skuIndex] ? String(row[skuIndex]).trim() : '';
           const title = row[titleIndex] ? String(row[titleIndex]).trim() : '';
-          if (sku && title) {
+          // SKU 可以为空，但 title 必须有值
+          if (title) {
             rows.push({ sku, title });
           }
         }
@@ -625,12 +626,12 @@ function App() {
                   {uploadedTableData.length > 0 && (
                     <div style={{marginTop: '16px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px'}}>
                       <div style={{fontSize: '0.875rem', fontWeight: 500, marginBottom: '8px'}}>
-                        数据预览（前 5 行）
+                        数据预览（前 10 行）
                       </div>
-                      <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', maxHeight: '150px', overflowY: 'auto'}}>
-                        {uploadedTableData.slice(0, 5).map((row, idx) => (
+                      <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', maxHeight: '200px', overflowY: 'auto'}}>
+                        {uploadedTableData.slice(0, 10).map((row, idx) => (
                           <div key={idx} style={{padding: '4px 0', borderBottom: '1px solid var(--border)'}}>
-                            <strong>SKU:</strong> {row.sku} | <strong>Title:</strong> {row.title.substring(0, 50)}...
+                            <strong>SKU:</strong> {row.sku || '(空)'} | <strong>Title:</strong> {row.title.substring(0, 50)}...
                           </div>
                         ))}
                       </div>
