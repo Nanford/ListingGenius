@@ -23,7 +23,7 @@ type ToastType = 'info' | 'error' | 'success';
 
 type DraftItem = {
   id: string;
-  sku?: string; // 🆕 新增 SKU 字段
+  spu?: string; // SPU 字段
   source_title: string;
   bullet_points: string[];
   translations?: string[];
@@ -37,7 +37,7 @@ type DraftItem = {
 };
 
 type TableRow = {
-  sku: string;
+  spu: string;
   title: string;
 };
 
@@ -147,11 +147,11 @@ function App() {
 
         // 读取表头
         const headers = jsonData[0].map((h: any) => String(h).toLowerCase().trim());
-        const skuIndex = headers.findIndex((h: string) => h === 'sku');
+        const spuIndex = headers.findIndex((h: string) => h === 'spu');
         const titleIndex = headers.findIndex((h: string) => h === 'title');
 
-        if (skuIndex === -1 || titleIndex === -1) {
-          showToast('表格必须包含 SKU 和 title 列', 'error');
+        if (spuIndex === -1 || titleIndex === -1) {
+          showToast('表格必须包含 SPU 和 title 列', 'error');
           return;
         }
 
@@ -159,11 +159,11 @@ function App() {
         const rows: TableRow[] = [];
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i];
-          const sku = row[skuIndex] ? String(row[skuIndex]).trim() : '';
+          const spu = row[spuIndex] ? String(row[spuIndex]).trim() : '';
           const title = row[titleIndex] ? String(row[titleIndex]).trim() : '';
-          // SKU 可以为空，但 title 必须有值
+          // SPU 可以为空，但 title 必须有值
           if (title) {
-            rows.push({ sku, title });
+            rows.push({ spu, title });
           }
         }
 
@@ -220,7 +220,7 @@ function App() {
 
   const handleBatchGenerate = async () => {
     // 根据输入模式决定数据源
-    let itemsToProcess: Array<{ sku?: string; title: string }> = [];
+    let itemsToProcess: Array<{ spu?: string; title: string }> = [];
 
     if (inputMode === 'import') {
       // 从表格数据生成
@@ -260,7 +260,7 @@ function App() {
         if (res.ok && data.data) {
           const draft: DraftItem = {
             id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-            sku: item.sku, // 🆕 保存 SKU 信息
+            spu: item.spu, // 保存 SPU 信息
             source_title: item.title,
             bullet_points: data.data.bullet_points,
             language_code: data.data.language || 'en-US',
@@ -344,20 +344,23 @@ function App() {
     showToast('已保存至草稿箱', 'success');
   };
 
-  const downloadCSV = () => {
+  const downloadExcel = () => {
     if (!staged.length) {
       showToast('暂无草稿可导出', 'error');
       return;
     }
+
+    // 构建表格数据
     const header = [
-      'SKU', // 🆕 添加 SKU 列
+      'SPU',
       'title',
       'point1', 'point2', 'point3', 'point4', 'point5',
       'trans_point1', 'trans_point2', 'trans_point3', 'trans_point4', 'trans_point5',
       'img-link', 'platform', 'language', 'trans_language'
     ];
+
     const rows = staged.map((item) => [
-      item.sku || '', // 🆕 导出 SKU 数据
+      item.spu || '',
       item.source_title,
       item.bullet_points[0] || '',
       item.bullet_points[1] || '',
@@ -374,21 +377,38 @@ function App() {
       item.language_code,
       item.trans_language_code || ''
     ]);
-    const csv = [header, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => `"${(cell ?? '').toString().replaceAll('"', '""')}"`)
-          .join(',')
-      )
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `listing_export_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('CSV 导出成功', 'success');
+
+    // 创建工作簿
+    const worksheetData = [header, ...rows];
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // 设置列宽
+    const columnWidths = [
+      { wch: 15 }, // SPU
+      { wch: 40 }, // title
+      { wch: 50 }, // point1
+      { wch: 50 }, // point2
+      { wch: 50 }, // point3
+      { wch: 50 }, // point4
+      { wch: 50 }, // point5
+      { wch: 50 }, // trans_point1
+      { wch: 50 }, // trans_point2
+      { wch: 50 }, // trans_point3
+      { wch: 50 }, // trans_point4
+      { wch: 50 }, // trans_point5
+      { wch: 30 }, // img-link
+      { wch: 10 }, // platform
+      { wch: 12 }, // language
+      { wch: 12 }  // trans_language
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Listings');
+
+    // 导出为 XLSX 文件
+    XLSX.writeFile(workbook, `listing_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showToast('XLSX 导出成功', 'success');
   };
 
   const updateBullet = (idx: number, value: string) => {
@@ -438,9 +458,9 @@ function App() {
                 ))}
              </div>
           </div>
-          <button className="btn btn-secondary" onClick={downloadCSV}>
+          <button className="btn btn-secondary" onClick={downloadExcel}>
             <Download size={16} />
-            导出 CSV
+            导出 XLSX
           </button>
         </div>
       </header>
@@ -615,7 +635,7 @@ function App() {
                             <div style={{fontWeight: 500, marginBottom: '4px'}}>点击或拖拽上传表格</div>
                             <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>
                               支持 .xlsx, .xls, .csv 格式<br/>
-                              必须包含 SKU 和 title 列
+                              必须包含 SPU 和 title 列
                             </div>
                           </div>
                         </>
@@ -631,7 +651,7 @@ function App() {
                       <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', maxHeight: '200px', overflowY: 'auto'}}>
                         {uploadedTableData.slice(0, 10).map((row, idx) => (
                           <div key={idx} style={{padding: '4px 0', borderBottom: '1px solid var(--border)'}}>
-                            <strong>SKU:</strong> {row.sku || '(空)'} | <strong>Title:</strong> {row.title.substring(0, 50)}...
+                            <strong>SPU:</strong> {row.spu || '(空)'} | <strong>Title:</strong> {row.title.substring(0, 50)}...
                           </div>
                         ))}
                       </div>
