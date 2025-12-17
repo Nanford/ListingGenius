@@ -3,16 +3,24 @@ import { env } from '../config/env.js';
 import { buildGenerationPrompt, buildTranslationPrompt } from './prompts.js';
 import { safeJsonParse } from '../utils/json.js';
 
-let cachedModel;
-const getModel = () => {
+const DEFAULT_GEMINI_MODEL_ID = 'gemini-3-pro-preview';
+const GEMINI_FLASH_MODEL_ID = 'gemini-3-flash-preview';
+
+let cachedGenAI;
+const cachedModels = new Map();
+const getModel = (modelId) => {
   if (!env.geminiKey) {
     throw new Error('GOOGLE_GEMINI_API_KEY 未配置');
   }
-  if (!cachedModel) {
-    const genAI = new GoogleGenerativeAI(env.geminiKey);
-    cachedModel = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
+  if (!cachedGenAI) {
+    cachedGenAI = new GoogleGenerativeAI(env.geminiKey);
   }
-  return cachedModel;
+
+  const effectiveModelId = modelId === GEMINI_FLASH_MODEL_ID ? GEMINI_FLASH_MODEL_ID : DEFAULT_GEMINI_MODEL_ID;
+  if (!cachedModels.has(effectiveModelId)) {
+    cachedModels.set(effectiveModelId, cachedGenAI.getGenerativeModel({ model: effectiveModelId }));
+  }
+  return cachedModels.get(effectiveModelId);
 };
 
 const normalizeBullets = (payload) => {
@@ -34,8 +42,8 @@ const extractText = (response) => {
 export const geminiProvider = {
   name: 'gemini',
 
-  async generate({ productTitle, productImageBase64, platform }) {
-    const model = getModel();
+  async generate({ productTitle, productImageBase64, platform, modelId }) {
+    const model = getModel(modelId);
     const prompt = buildGenerationPrompt(platform);
     const parts = [
       { text: prompt },
@@ -78,8 +86,8 @@ export const geminiProvider = {
     };
   },
 
-  async translate({ contentArray, targetLanguage }) {
-    const model = getModel();
+  async translate({ contentArray, targetLanguage, modelId }) {
+    const model = getModel(modelId);
     const prompt = buildTranslationPrompt(targetLanguage);
     const result = await model.generateContent({
       contents: [

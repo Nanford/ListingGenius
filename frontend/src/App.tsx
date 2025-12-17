@@ -17,7 +17,7 @@ import {
 import * as XLSX from 'xlsx';
 import './App.css';
 
-type Provider = 'openai' | 'gemini' | 'kimi';
+type Provider = 'openai' | 'gemini' | 'kimi' | 'gemini-flash';
 type Platform = 'AMAZON' | 'EBAY';
 type ToastType = 'info' | 'error' | 'success';
 
@@ -190,6 +190,8 @@ function App() {
     }
     setLoading(true);
     try {
+      const modelProvider = provider === 'gemini-flash' ? 'gemini' : provider;
+      const modelId = provider === 'gemini-flash' ? 'gemini-3-flash-preview' : undefined;
       const payload = {
         prompt_context: {
           title: title.trim(),
@@ -197,7 +199,8 @@ function App() {
           image_base64: imageBase64 || undefined
         },
         target_platform: platform,
-        model_provider: provider
+        model_provider: modelProvider,
+        model_id: modelId
       };
       const res = await fetch(`${API_BASE}/api/v1/listing/generate`, {
         method: 'POST',
@@ -245,10 +248,13 @@ function App() {
     for (let i = 0; i < itemsToProcess.length; i++) {
       const item = itemsToProcess[i];
       try {
+        const modelProvider = provider === 'gemini-flash' ? 'gemini' : provider;
+        const modelId = provider === 'gemini-flash' ? 'gemini-3-flash-preview' : undefined;
         const payload = {
           prompt_context: { title: item.title },
           target_platform: platform,
-          model_provider: provider
+          model_provider: modelProvider,
+          model_id: modelId
         };
         const res = await fetch(`${API_BASE}/api/v1/listing/generate`, {
           method: 'POST',
@@ -294,10 +300,13 @@ function App() {
     // No confirmation needed as we are not overwriting
     setTranslating(true);
     try {
+      const modelProvider = provider === 'gemini-flash' ? 'gemini' : provider;
+      const modelId = provider === 'gemini-flash' ? 'gemini-3-flash-preview' : undefined;
       const payload = {
         content_array: bulletPoints,
         target_language: targetLang,
-        model_provider: provider
+        model_provider: modelProvider,
+        model_id: modelId
       };
       const res = await fetch(`${API_BASE}/api/v1/listing/translate`, {
         method: 'POST',
@@ -442,6 +451,7 @@ function App() {
               <option value="gemini">Gemini Pro</option>
               <option value="openai">GPT-5.1</option>
               <option value="kimi">Kimi (Moonshot)</option>
+              <option value="gemini-flash">Gemini flash</option>
             </select>
           </div>
           <div className="control-group">

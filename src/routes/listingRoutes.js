@@ -19,16 +19,20 @@ const promptContextSchema = z
     }
   );
 
+const geminiModelSchema = z.enum(['gemini-3-pro-preview', 'gemini-3-flash-preview']);
+
 const generateSchema = z.object({
   prompt_context: promptContextSchema,
   target_platform: z.enum(['AMAZON', 'EBAY']).default('AMAZON'),
-  model_provider: z.enum(['openai', 'gemini']).optional()
+  model_provider: z.enum(['openai', 'gemini']).optional(),
+  model_id: geminiModelSchema.optional()
 });
 
 const translateSchema = z.object({
   content_array: z.array(z.string().trim()).min(1, 'content_array 不能为空'),
   target_language: z.string().trim().min(1, 'target_language 不能为空'),
-  model_provider: z.enum(['openai', 'gemini']).optional()
+  model_provider: z.enum(['openai', 'gemini']).optional(),
+  model_id: geminiModelSchema.optional()
 });
 
 router.post('/generate', async (req, res) => {
@@ -46,7 +50,8 @@ router.post('/generate', async (req, res) => {
     const result = await provider.generate({
       productTitle,
       productImageBase64: imageBase64,
-      platform
+      platform,
+      modelId: parsed.model_id
     });
 
     return res.json({
@@ -81,7 +86,8 @@ router.post('/translate', async (req, res) => {
 
     const result = await provider.translate({
       contentArray: parsed.content_array,
-      targetLanguage: parsed.target_language
+      targetLanguage: parsed.target_language,
+      modelId: parsed.model_id
     });
 
     return res.json({
