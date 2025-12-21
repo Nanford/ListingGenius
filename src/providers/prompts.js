@@ -17,7 +17,7 @@ export const buildGenerationPrompt = (platform = 'amazon') => {
     '要求：',
     '- 自动提炼卖点：从产品标题中提取 3-5 个核心卖点（技术参数、功能特点、使用场景等），无需用户手动输入。',
     '- 卖点需基于标题关键词，如 wireless、noise cancellation、ergonomic、Bluetooth 5.0、30-hour battery 等。',
-    '- 五点描述格式：每点以加粗的卖点开头（如 **Noise Cancellation Technology**），紧接描述文案。',
+    '- 五点描述格式：描述文案需以强有力的动词开头，并尽可能的详细，且能突出产品卖点。',
     '- 描述文案需以强有力的动词开头（如 Enjoy, Experience, Discover, Get 等）。',
     '- 详细描述卖点：解释技术原理或实际应用场景，并强调用户利益。',
     '- 每点包含 1-2 个与产品相关的关键词（如 travel, office use, wireless connectivity）。',
