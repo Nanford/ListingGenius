@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { buildGenerationPrompt, buildTranslationPrompt } from './prompts.js';
 import { safeJsonParse } from '../utils/json.js';
 
-const DEFAULT_GEMINI_MODEL_ID = 'gemini-3-pro-preview';
+const DEFAULT_GEMINI_MODEL_ID = 'gemini-3.1-pro-preview';
 const GEMINI_FLASH_MODEL_ID = 'gemini-3-flash-preview';
 
 let cachedGenAI;

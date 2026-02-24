@@ -17,7 +17,7 @@ import {
 import * as XLSX from 'xlsx';
 import './App.css';
 
-type Provider = 'openai' | 'gemini' | 'kimi' | 'gemini-flash';
+type Provider = 'openai' | 'gemini' | 'gemini-flash';
 type Platform = 'AMAZON' | 'EBAY';
 type ToastType = 'info' | 'error' | 'success';
 
@@ -448,9 +448,8 @@ function App() {
               value={provider} 
               onChange={(e) => setProvider(e.target.value as Provider)}
             >
-              <option value="gemini">Gemini Pro</option>
+              <option value="gemini">Gemini 3.1 Pro (默认)</option>
               <option value="openai">GPT-5.1</option>
-              <option value="kimi">Kimi (Moonshot)</option>
               <option value="gemini-flash">Gemini flash</option>
             </select>
           </div>

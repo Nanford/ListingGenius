@@ -19,7 +19,7 @@ const promptContextSchema = z
     }
   );
 
-const geminiModelSchema = z.enum(['gemini-3-pro-preview', 'gemini-3-flash-preview']);
+const geminiModelSchema = z.enum(['gemini-3.1-pro-preview', 'gemini-3-flash-preview']);
 
 const generateSchema = z.object({
   prompt_context: promptContextSchema,
