@@ -24,14 +24,14 @@ const geminiModelSchema = z.enum(['gemini-3.1-pro-preview', 'gemini-3-flash-prev
 const generateSchema = z.object({
   prompt_context: promptContextSchema,
   target_platform: z.enum(['AMAZON', 'EBAY']).default('AMAZON'),
-  model_provider: z.enum(['openai', 'gemini']).optional(),
+  model_provider: z.enum(['openai', 'gemini', 'kimi']).optional(),
   model_id: geminiModelSchema.optional()
 });
 
 const translateSchema = z.object({
   content_array: z.array(z.string().trim()).min(1, 'content_array 不能为空'),
   target_language: z.string().trim().min(1, 'target_language 不能为空'),
-  model_provider: z.enum(['openai', 'gemini']).optional(),
+  model_provider: z.enum(['openai', 'gemini', 'kimi']).optional(),
   model_id: geminiModelSchema.optional()
 });
 

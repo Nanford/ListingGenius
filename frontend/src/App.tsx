@@ -17,7 +17,7 @@ import {
 import * as XLSX from 'xlsx';
 import './App.css';
 
-type Provider = 'openai' | 'gemini' | 'gemini-flash';
+type Provider = 'openai' | 'gemini' | 'gemini-flash' | 'kimi';
 type Platform = 'AMAZON' | 'EBAY';
 type ToastType = 'info' | 'error' | 'success';
 
@@ -211,8 +211,8 @@ function App() {
       if (!res.ok) throw new Error(data.message || '生成失败');
       setBulletPoints(data.data.bullet_points || emptyBullets());
       setLanguage(data.data.language || 'en-US');
-      setTranslations(emptyBullets()); // Reset translations on new generation
-      setShowTranslation(false); // Hide translation on new generation
+      setTranslations(emptyBullets());
+      setShowTranslation(false);
       showToast(`生成成功 (${data.data.provider || provider})`, 'success');
     } catch (err: any) {
       showToast(err.message || '生成失败', 'error');
@@ -449,8 +449,9 @@ function App() {
               onChange={(e) => setProvider(e.target.value as Provider)}
             >
               <option value="gemini">Gemini 3.1 Pro (默认)</option>
-              <option value="openai">GPT-5.1</option>
-              <option value="gemini-flash">Gemini flash</option>
+              <option value="openai">GPT-5.5</option>
+              <option value="kimi">Kimi K2.6</option>
+              <option value="gemini-flash">Gemini Flash</option>
             </select>
           </div>
           <div className="control-group">

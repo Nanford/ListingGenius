@@ -10,12 +10,16 @@ const clean = (value) => {
   return match ? match[1] : trimmed;
 };
 
+const VALID_PROVIDERS = ['openai', 'gemini', 'kimi'];
+
 export const env = {
   openaiKey: clean(process.env.OPENAI_API_KEY),
   geminiKey: clean(process.env.GOOGLE_GEMINI_API_KEY),
+  kimiKey: clean(process.env.KIMI_API_KEY),
+  kimiModel: clean(process.env.KIMI_MODEL) || 'kimi-k2.6',
   provider: (() => {
     const val = (process.env.LLM_PROVIDER || 'gemini').toLowerCase();
-    if (val === 'openai' || val === 'gemini') return val;
+    if (VALID_PROVIDERS.includes(val)) return val;
     console.warn(`未知的 LLM_PROVIDER: ${val}，将使用 gemini`);
     return 'gemini';
   })(),
@@ -28,5 +32,8 @@ export const assertEnv = () => {
   }
   if (env.provider === 'gemini' && !env.geminiKey) {
     throw new Error('GOOGLE_GEMINI_API_KEY 未配置');
+  }
+  if (env.provider === 'kimi' && !env.kimiKey) {
+    throw new Error('KIMI_API_KEY 未配置');
   }
 };

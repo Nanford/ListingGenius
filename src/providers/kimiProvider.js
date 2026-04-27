@@ -5,12 +5,13 @@ import { safeJsonParse } from '../utils/json.js';
 
 let cachedClient;
 const getClient = () => {
-  if (!env.openaiKey) {
-    throw new Error('OPENAI_API_KEY 未配置');
+  if (!env.kimiKey) {
+    throw new Error('KIMI_API_KEY 未配置');
   }
   if (!cachedClient) {
     cachedClient = new OpenAI({
-      apiKey: env.openaiKey,
+      apiKey: env.kimiKey,
+      baseURL: 'https://api.moonshot.cn/v1',
       maxRetries: 3,
       timeout: 60_000
     });
@@ -26,52 +27,48 @@ const normalizeBullets = (payload) => {
     .filter(Boolean);
 };
 
-export const openaiProvider = {
-  name: 'openai',
+export const kimiProvider = {
+  name: 'kimi',
 
   async generate({ productTitle, productImageBase64, platform }) {
     const client = getClient();
     const system = buildGenerationPrompt(platform);
 
-    const user = {
-      role: 'user',
-      content: [
-        {
-          type: 'text',
-          text: `产品标题: ${productTitle || '(未提供)'}`
-        }
-      ]
-    };
+    const userContent = [
+      {
+        type: 'text',
+        text: `产品标题: ${productTitle || '(未提供)'}`
+      }
+    ];
 
     if (productImageBase64) {
-      user.content.push({
+      userContent.push({
         type: 'image_url',
         image_url: {
-          url: `data:image/jpeg;base64,${productImageBase64}`,
-          detail: 'high'
+          url: `data:image/jpeg;base64,${productImageBase64}`
         }
       });
     }
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-5.5',
+      model: env.kimiModel,
       temperature: 0.6,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
-        user
+        { role: 'user', content: userContent }
       ]
     });
 
     const raw = completion.choices[0]?.message?.content || '';
     const parsed = safeJsonParse(raw);
     if (!parsed.ok) {
-      throw new Error(`OpenAI 返回的 JSON 解析失败: ${parsed.error.message}`);
+      throw new Error(`Kimi 返回的 JSON 解析失败: ${parsed.error.message}`);
     }
 
     const bulletPoints = normalizeBullets(parsed.value);
     if (bulletPoints.length !== 5) {
-      throw new Error(`OpenAI 返回的 bullet_points 数量异常: ${bulletPoints.length}`);
+      throw new Error(`Kimi 返回的 bullet_points 数量异常: ${bulletPoints.length}`);
     }
 
     return {
@@ -86,7 +83,7 @@ export const openaiProvider = {
     const system = buildTranslationPrompt(targetLanguage);
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-5.5',
+      model: env.kimiModel,
       temperature: 0.6,
       response_format: { type: 'json_object' },
       messages: [
@@ -101,12 +98,12 @@ export const openaiProvider = {
     const raw = completion.choices[0]?.message?.content || '';
     const parsed = safeJsonParse(raw);
     if (!parsed.ok) {
-      throw new Error(`OpenAI 翻译结果解析失败: ${parsed.error.message}`);
+      throw new Error(`Kimi 翻译结果解析失败: ${parsed.error.message}`);
     }
 
     const translated = parsed.value.translated_array || parsed.value.translatedArray;
     if (!Array.isArray(translated)) {
-      throw new Error('OpenAI 翻译结果缺少 translated_array');
+      throw new Error('Kimi 翻译结果缺少 translated_array');
     }
 
     return { translated_array: translated, raw: parsed.value };
