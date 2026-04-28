@@ -55,7 +55,7 @@ export const openaiProvider = {
 
     const completion = await client.chat.completions.create({
       model: 'gpt-5.5',
-      temperature: 0.6,
+      reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -87,7 +87,7 @@ export const openaiProvider = {
 
     const completion = await client.chat.completions.create({
       model: 'gpt-5.5',
-      temperature: 0.6,
+      reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
