@@ -68,7 +68,7 @@ function App() {
   const [imageUrl, setImageUrl] = useState('');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [platform, setPlatform] = useState<Platform>('AMAZON');
-  const [provider, setProvider] = useState<Provider>('gemini');
+  const [provider, setProvider] = useState<Provider>('openai');
   const [bulletPoints, setBulletPoints] = useState<string[]>(() => emptyBullets());
   const [translations, setTranslations] = useState<string[]>(() => emptyBullets());
   const [showTranslation, setShowTranslation] = useState(false);
@@ -448,8 +448,8 @@ function App() {
               value={provider} 
               onChange={(e) => setProvider(e.target.value as Provider)}
             >
-              <option value="gemini">Gemini 3.1 Pro (默认)</option>
-              <option value="openai">GPT-5.5</option>
+              <option value="openai">GPT-5.5 (默认)</option>
+              <option value="gemini">Gemini 3.1 Pro</option>
               <option value="kimi">Kimi K2.6</option>
               <option value="gemini-flash">Gemini Flash</option>
             </select>
