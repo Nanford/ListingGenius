@@ -55,7 +55,7 @@ export const openaiProvider = {
 
     const completion = await client.chat.completions.create({
       model: 'gpt-5.6-terra',
-      reasoning_effort: 'max',
+      reasoning_effort: 'xhigh',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -87,7 +87,7 @@ export const openaiProvider = {
 
     const completion = await client.chat.completions.create({
       model: 'gpt-5.6-terra',
-      reasoning_effort: 'max',
+      reasoning_effort: 'xhigh',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
