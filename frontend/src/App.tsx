@@ -448,7 +448,7 @@ function App() {
               value={provider} 
               onChange={(e) => setProvider(e.target.value as Provider)}
             >
-              <option value="openai">GPT-5.5 (默认)</option>
+              <option value="openai">GPT-5.6 Terra (默认)</option>
               <option value="gemini">Gemini 3.1 Pro</option>
               <option value="kimi">Kimi K2.6</option>
               <option value="gemini-flash">Gemini Flash</option>
